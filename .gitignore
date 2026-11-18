@@ -2,3 +2,7 @@ node_modules
 dist
 .dev.vars
 .wrangler
+# Exercise photos are stored as base64 text (.b64) and decoded at build
+# time by scripts/decode-assets.mjs; the binary images are generated.
+src/assets/*.jpg
+src/assets/*.webp
