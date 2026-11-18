@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DAILY_SKELETON, EXERCISES, PHASES, RED_FLAGS, painFeedback } from './data'
-import { getAuthState, loadCheckIns, loadProfile, loadWaist, logout, onUnauthorized, saveCheckIn, saveProfile, saveWaist, todayStr, weekNumber } from './api'
+import { clearAuthData, getAuthState, loadCheckIns, loadProfile, loadWaist, logout, onUnauthorized, saveCheckIn, saveProfile, saveWaist, todayStr, weekNumber } from './api'
 import type { AuthUser, CheckIn, Profile, WaistEntry } from './api'
 import AuthScreen from './components/Auth'
 import { ExerciseSvg } from './svg'
@@ -42,6 +42,14 @@ function computeStreak(checkIns: CheckIn[]): number {
   return streak
 }
 
+// BMI is derived from the logged-in user's own profile, never hardcoded:
+// a fixed value would be wrong (and would leak the first user's data)
+// for every other account.
+function bmiOf(p: Profile | null): number | null {
+  if (!p?.height_cm || !p?.weight_kg) return null
+  return +(p.weight_kg / (p.height_cm / 100) ** 2).toFixed(1)
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>('today')
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -52,6 +60,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [localMode, setLocalMode] = useState(false)
+  const [serverError, setServerError] = useState(false)
 
   async function loadAll() {
     const [p, c, w] = await Promise.all([loadProfile(), loadCheckIns(), loadWaist()])
@@ -61,6 +70,9 @@ export default function App() {
   }
 
   function toLogin() {
+    // A 401 means the session is dead: drop the token AND the cached data,
+    // or the next account on this browser would inherit the old profile.
+    clearAuthData()
     setUser(null)
     setProfile(null)
     setCheckIns([])
@@ -80,6 +92,10 @@ export default function App() {
         // browser-only behaviour, no login screen.
         setLocalMode(true)
         await loadAll()
+      } else if (state.mode === 'error') {
+        // The server answered 5xx: show a retry screen instead of
+        // silently running in local mode and losing synced data.
+        setServerError(true)
       }
       // guest: stay on the login screen, load nothing.
       setLoaded(true)
@@ -88,6 +104,7 @@ export default function App() {
 
   const phase = profile?.current_phase ?? 1
   const week = weekNumber(profile?.start_date)
+  const bmi = bmiOf(profile)
   const todayCheckIn = checkIns.find((c) => c.date === todayStr())
   const last7 = useMemo(() => {
     const cutoff = new Date()
@@ -135,6 +152,18 @@ export default function App() {
 
   if (!loaded) return <div className="app"><p>加载中…</p></div>
 
+  if (serverError) {
+    return (
+      <div className="app">
+        <div className="card">
+          <h2>服务器暂时不可用</h2>
+          <p className="muted">刚才没能连上服务器，数据没有加载。请检查网络后重试。</p>
+          <button className="primary" onClick={() => window.location.reload()}>重试</button>
+        </div>
+      </div>
+    )
+  }
+
   if (!user && !localMode) {
     return <AuthScreen onDone={async (u) => { setUser(u); await loadAll() }} />
   }
@@ -144,12 +173,12 @@ export default function App() {
       <header className="hero">
         <p className="hero-date">{dateStr()}</p>
         <h1>{greeting()}，今天也要动起来</h1>
-        <p className="hero-sub">久坐办公 · 颈肩腰腹 · L5–S1 微创术后 1 年 · 医生已建议锻炼 · 每天 07:00 起床、20:30 到家</p>
+        <p className="hero-sub">久坐办公 · 颈肩腰腹 · 每天动一动</p>
         {profile && (
           <div className="hero-chips">
             <span className="chip">第 {week} 周 / 共 8 周</span>
             <span className="chip">第 {phase} 阶段</span>
-            <span className="chip chip-blue">BMI 23.5 · 76kg / 180cm</span>
+            {bmi != null && <span className="chip chip-blue">BMI {bmi} · {profile.weight_kg}kg / {profile.height_cm}cm</span>}
           </div>
         )}
       </header>
@@ -167,6 +196,7 @@ export default function App() {
       )}
       {(showOnboarding || (!profile && skipped)) && !profile && (
         <Onboarding
+          synced={!localMode}
           onDone={async (p) => { const s = await saveProfile(p); setProfile(s); setShowOnboarding(false) }}
           onSkip={() => { setSkipped(true); setShowOnboarding(false) }}
         />
@@ -237,6 +267,7 @@ export default function App() {
 
           <CheckInForm
             existing={todayCheckIn}
+            synced={!localMode}
             onSave={async (c) => { await saveCheckIn(c); setCheckIns(await loadCheckIns()) }}
           />
           <div className="card">
@@ -291,7 +322,7 @@ export default function App() {
 
       {tab === 'track' && (
         <>
-          <WaistLog entries={waist} onSave={async (e) => { await saveWaist(e); setWaist(await loadWaist()) }} />
+          <WaistLog entries={waist} synced={!localMode} onSave={async (e) => { await saveWaist(e); setWaist(await loadWaist()) }} />
           <div className="card">
             <h2>近 7 天统计</h2>
             <p>打卡天数：{last7.length} / 7 天</p>
@@ -321,15 +352,14 @@ export default function App() {
           )}
           {profile ? (
             <>
-              <p>身高 {profile.height_cm} cm · 体重 {profile.weight_kg} kg · BMI 23.5</p>
+              <p>身高 {profile.height_cm} cm · 体重 {profile.weight_kg} kg{bmi != null ? ` · BMI ${bmi}` : ''}</p>
               <p>年龄 {profile.age ?? '未填'} · 腰围 {profile.waist_cm ?? '未量'} cm · 睡眠 {profile.sleep_hours ?? '未填'} 小时</p>
               <p>久坐 {profile.sitting_hours ?? '未填'} 小时/天 · 日均步数 {profile.daily_steps ?? '未填'}</p>
               <p>当前腰痛 {profile.pain_now ?? 0} 分 · 腿痛{profile.leg_pain ? '有' : '无'} · 腿麻{profile.leg_numbness ? '有' : '无'} · 腿无力{profile.leg_weakness ? '有' : '无'}</p>
               <p>单腿站 {profile.single_leg_seconds ?? '未测'} 秒 · 靠墙静蹲 {profile.wall_sit_seconds ?? '未测'} 秒</p>
               <p>推荐阶段：第 {profile.recommended_phase} 阶段 · 当前阶段：第 {profile.current_phase} 阶段 · 开始日：{profile.start_date ?? '未开始'}</p>
-              <p className="muted">术后背景：L5–S1 微创手术 1 年前，术后 1 个月恢复上班，医生已建议锻炼。计划开始日记为建档当天。</p>
               <button onClick={() => setShowOnboarding(true)}>重新评估（重新建档）</button>
-              {showOnboarding && <Onboarding onDone={async (p) => { const s = await saveProfile(p); setProfile(s); setShowOnboarding(false) }} onSkip={() => setShowOnboarding(false)} />}
+              {showOnboarding && <Onboarding synced={!localMode} onDone={async (p) => { const s = await saveProfile(p); setProfile(s); setShowOnboarding(false) }} onSkip={() => setShowOnboarding(false)} />}
             </>
           ) : (
             <p className="muted">还没有档案，先完成建档向导。</p>

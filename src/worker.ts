@@ -90,7 +90,12 @@ async function verifyPassword(password: string, saltB64: string, hashB64: string
 
 async function createSession(env: Env, userId: number): Promise<string> {
   const token = newToken()
-  const expires = new Date(Date.now() + 30 * 86400000).toISOString()
+  // Store in SQLite datetime format ("YYYY-MM-DD HH:MM:SS", UTC) so the
+  // auth check `expires_at > datetime('now')` compares like with like.
+  // The previous ISO form ("...T...Z" with millis) compared 'T' > ' ' on
+  // the expiry date, so a session stayed valid until the end of that day
+  // — up to ~24h past the intended 30 days.
+  const expires = new Date(Date.now() + 30 * 86400000).toISOString().replace('T', ' ').slice(0, 19)
   await env.DB.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?1, ?2, ?3)')
     .bind(token, userId, expires)
     .run()
@@ -110,6 +115,21 @@ async function authUserId(request: Request, env: Env): Promise<number | null> {
   return row ? row.user_id : null
 }
 
+// Simple per-IP rate limit for the auth endpoints, backed by D1.
+// `limit` attempts per `windowSeconds` per key; returns false when hit.
+async function checkRateLimit(env: Env, key: string, limit: number, windowSeconds: number): Promise<boolean> {
+  const now = Math.floor(Date.now() / 1000)
+  await env.DB.prepare('DELETE FROM rate_limits WHERE window_start < ?1').bind(now - windowSeconds).run()
+  const row = await env.DB.prepare('SELECT count, window_start FROM rate_limits WHERE key = ?1').bind(key).first<{ count: number; window_start: number }>()
+  if (!row || now - row.window_start >= windowSeconds) {
+    await env.DB.prepare('INSERT INTO rate_limits (key, count, window_start) VALUES (?1, 1, ?2) ON CONFLICT(key) DO UPDATE SET count=1, window_start=excluded.window_start').bind(key, now).run()
+    return true
+  }
+  if (row.count >= limit) return false
+  await env.DB.prepare('UPDATE rate_limits SET count = count + 1 WHERE key = ?1').bind(key).run()
+  return true
+}
+
 function isEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)
 }
@@ -122,6 +142,10 @@ export default {
       try {
         // ----- auth endpoints (no session needed) -----
         if (url.pathname === '/api/auth/register' && request.method === 'POST') {
+          const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+          if (!(await checkRateLimit(env, `auth:${ip}`, 10, 600))) {
+            return json({ error: 'too_many_requests', message: '尝试太多次了，请 10 分钟后再试' }, 429)
+          }
           const body = (await request.json()) as Record<string, unknown>
           const email = String(body.email ?? '').trim().toLowerCase()
           const password = String(body.password ?? '')
@@ -131,11 +155,21 @@ export default {
           if (existing) return json({ error: 'email_taken', message: '这个邮箱已经注册过了，直接登录吧' }, 409)
           const salt = crypto.getRandomValues(new Uint8Array(16))
           const hash = await hashPassword(password, salt)
-          const ins = await env.DB.prepare(
-            'INSERT INTO users (email, password_hash, password_salt) VALUES (?1, ?2, ?3)',
-          )
-            .bind(email, hash, bufToB64(salt.buffer))
-            .run()
+          let ins
+          try {
+            ins = await env.DB.prepare(
+              'INSERT INTO users (email, password_hash, password_salt) VALUES (?1, ?2, ?3)',
+            )
+              .bind(email, hash, bufToB64(salt.buffer))
+              .run()
+          } catch (err) {
+            // Concurrent registration with the same email: the SELECT
+            // above passed for both, the UNIQUE constraint catches one.
+            if (String(err).includes('UNIQUE constraint')) {
+              return json({ error: 'email_taken', message: '这个邮箱已经注册过了，直接登录吧' }, 409)
+            }
+            throw err
+          }
           const userId = ins.meta.last_row_id as number
           if (!userId) throw new Error('failed to create user')
           // One-time migration claim: rows created before accounts existed
@@ -152,6 +186,12 @@ export default {
           const body = (await request.json()) as Record<string, unknown>
           const email = String(body.email ?? '').trim().toLowerCase()
           const password = String(body.password ?? '')
+          // Per-email limit, not per-IP: password guessing targets one
+          // account, and the caller's IP may rotate (proxies, CGNAT), so
+          // an IP-only limit would never accumulate. 10 attempts / 10 min.
+          if (!(await checkRateLimit(env, `login:${email}`, 10, 600))) {
+            return json({ error: 'too_many_requests', message: '尝试太多次了，请 10 分钟后再试' }, 429)
+          }
           const user = await env.DB.prepare(
             'SELECT id, email, password_hash, password_salt FROM users WHERE email = ?1',
           )
@@ -192,12 +232,17 @@ export default {
         }
         if (url.pathname === '/api/profile' && request.method === 'PUT') {
           const p = (await request.json()) as Record<string, unknown>
+          // Height and weight are required: defaulting them to one user's
+          // numbers would give every account the wrong BMI.
+          if (p.height_cm == null || p.weight_kg == null) {
+            return json({ error: 'missing_fields', message: '身高和体重必填' }, 400)
+          }
           await env.DB.prepare(
             `INSERT INTO profiles (user_id, age, height_cm, weight_kg, waist_cm, sleep_hours, sitting_hours, daily_steps, pain_now, leg_pain, leg_numbness, leg_weakness, red_flag, single_leg_seconds, wall_sit_seconds, daily_minutes, equipment, focus, recommended_phase, current_phase, start_date, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, datetime('now'))
              ON CONFLICT(user_id) DO UPDATE SET age=excluded.age, height_cm=excluded.height_cm, weight_kg=excluded.weight_kg, waist_cm=excluded.waist_cm, sleep_hours=excluded.sleep_hours, sitting_hours=excluded.sitting_hours, daily_steps=excluded.daily_steps, pain_now=excluded.pain_now, leg_pain=excluded.leg_pain, leg_numbness=excluded.leg_numbness, leg_weakness=excluded.leg_weakness, red_flag=excluded.red_flag, single_leg_seconds=excluded.single_leg_seconds, wall_sit_seconds=excluded.wall_sit_seconds, daily_minutes=excluded.daily_minutes, equipment=excluded.equipment, focus=excluded.focus, recommended_phase=excluded.recommended_phase, current_phase=excluded.current_phase, start_date=excluded.start_date, updated_at=datetime('now')`,
           )
-            .bind(userId, p.age ?? null, p.height_cm ?? 180, p.weight_kg ?? 76, p.waist_cm ?? null, p.sleep_hours ?? null, p.sitting_hours ?? null, p.daily_steps ?? null, p.pain_now ?? 0, p.leg_pain ? 1 : 0, p.leg_numbness ? 1 : 0, p.leg_weakness ? 1 : 0, p.red_flag ? 1 : 0, p.single_leg_seconds ?? null, p.wall_sit_seconds ?? null, p.daily_minutes ?? null, p.equipment ?? '', p.focus ?? '', p.recommended_phase ?? 1, p.current_phase ?? 1, p.start_date ?? null)
+            .bind(userId, p.age ?? null, p.height_cm, p.weight_kg, p.waist_cm ?? null, p.sleep_hours ?? null, p.sitting_hours ?? null, p.daily_steps ?? null, p.pain_now ?? 0, p.leg_pain ? 1 : 0, p.leg_numbness ? 1 : 0, p.leg_weakness ? 1 : 0, p.red_flag ? 1 : 0, p.single_leg_seconds ?? null, p.wall_sit_seconds ?? null, p.daily_minutes ?? null, p.equipment ?? '', p.focus ?? '', p.recommended_phase ?? 1, p.current_phase ?? 1, p.start_date ?? null)
             .run()
           const row = await env.DB.prepare('SELECT * FROM profiles WHERE user_id = ?1').bind(userId).first<Row>()
           return json(profileFromRow(row))
@@ -232,8 +277,9 @@ export default {
           return json({ ok: true })
         }
         return json({ error: 'not found' }, 404)
-      } catch (err) {
-        return json({ error: String(err) }, 500)
+      } catch {
+        // Never leak internals (e.g. D1 error text revealing table names).
+        return json({ error: '服务器出错了，请稍后重试' }, 500)
       }
     }
 

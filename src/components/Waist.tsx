@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { WaistEntry } from '../api'
 import { todayStr } from '../api'
 
-export default function WaistLog({ entries, onSave }: { entries: WaistEntry[]; onSave: (e: WaistEntry) => Promise<void> }) {
+export default function WaistLog({ entries, synced, onSave }: { entries: WaistEntry[]; synced?: boolean; onSave: (e: WaistEntry) => Promise<void> }) {
   const [val, setVal] = useState('')
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -32,7 +32,7 @@ export default function WaistLog({ entries, onSave }: { entries: WaistEntry[]; o
   return (
     <div className="card">
       <h2>腰围记录</h2>
-      <p className="muted">每周同一时间、肚脐同一位置量：软尺放肚脐一圈，呼气后放松着量，站直别收腹。只看腰围，不只看体重；局部减脂做不到，目标是腰围慢慢下来。男性参考线：94 cm 风险升高，102 cm 明显升高（NHS）。腰围变化一般要 4–12 周。</p>
+      <p className="muted">每周同一时间、肚脐同一位置量：软尺放肚脐一圈，呼气后放松着量，站直别收腹。只看腰围，不只看体重；局部减脂做不到，目标是腰围慢慢下来。男性参考线：94 cm 风险升高，102 cm 明显升高（NHS）。腰围变化通常需要数周。</p>
       {entries.length > 0 && last != null && (
         <p>最新：<strong>{last} cm</strong>{delta !== null && <> · 较首次 {Number(delta) > 0 ? '+' : ''}{delta} cm</>}</p>
       )}
@@ -48,9 +48,9 @@ export default function WaistLog({ entries, onSave }: { entries: WaistEntry[]; o
       )}
       <label>今天腰围（cm）</label>
       <input type="number" step="0.1" value={val} onChange={(e) => { setVal(e.target.value); setSaved(false); setSaveError(false) }} placeholder="例如 93.2" />
-      <button className="primary" disabled={!val || saving} onClick={handleSave}>{saving ? '保存中…' : saved ? '已保存在本机 ✓' : '记一笔'}</button>
+      <button className="primary" disabled={!val || saving} onClick={handleSave}>{saving ? '保存中…' : saved ? (synced ? '已同步到云端 ✓' : '已保存在本机 ✓') : '记一笔'}</button>
       {saveError && <p className="danger">保存失败，请检查网络后重试，刚才的数字还在。</p>}
-      {saved && <p className="muted">仅保存在当前浏览器里（Pages 体验版没有服务器同步），换设备或清缓存会丢失。</p>}
+      {saved && <p className="muted">{synced ? '已保存到你的账号，换设备登录也能看到。' : '仅保存在当前浏览器里（Pages 体验版没有服务器同步），换设备或清缓存会丢失。'}</p>}
       {entries.length > 0 && (
         <ul>{[...entries].reverse().slice(0, 8).map((e) => <li key={e.date}>{e.date} · {e.waist_cm} cm</li>)}</ul>
       )}

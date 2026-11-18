@@ -54,10 +54,13 @@ export interface AuthUser {
 // 'authed': Worker session is valid. 'guest': Worker is present but the
 // session is missing or expired, show the login screen. 'local': no Worker
 // behind this build (static Pages / offline), use browser storage only.
+// 'error': the Worker answered with a 5xx — show a retry screen instead of
+// silently falling back to local mode, where saves could be overwritten.
 export type AuthState =
   | { mode: 'authed'; user: AuthUser }
   | { mode: 'guest' }
   | { mode: 'local' }
+  | { mode: 'error' }
 
 const LS_PROFILE = 'rt_profile_v1'
 const LS_CHECKINS = 'rt_checkins_v1'
@@ -125,6 +128,7 @@ export async function getAuthState(): Promise<AuthState> {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
     if (res.status === 401) return { mode: 'guest' }
+    if (res.status >= 500) return { mode: 'error' }
     if (!res.ok) return { mode: 'local' }
     const data = (await res.json()) as { id?: unknown; email?: unknown }
     if (!data || typeof data.email !== 'string' || typeof data.id !== 'number') return { mode: 'local' }
@@ -201,7 +205,11 @@ export async function loadProfile(): Promise<Profile | null> {
 }
 
 export async function saveProfile(p: Profile): Promise<Profile> {
+  const authed = !!getToken()
   const saved = await api<Profile>('/api/profile', { method: 'PUT', body: JSON.stringify(p) })
+  // Logged in but the server did not take it: say so instead of showing
+  // a success message for a save that only landed in this browser.
+  if (authed && !saved) throw new Error('保存失败，请检查网络后重试')
   const value = saved ?? p
   ls.set(LS_PROFILE, value)
   return value
@@ -217,10 +225,12 @@ export async function loadCheckIns(): Promise<CheckIn[]> {
 }
 
 export async function saveCheckIn(c: CheckIn): Promise<void> {
-  await api('/api/check-ins', { method: 'POST', body: JSON.stringify(c) })
+  const authed = !!getToken()
+  const saved = await api('/api/check-ins', { method: 'POST', body: JSON.stringify(c) })
   const all = ls.get<CheckIn[]>(LS_CHECKINS, []).filter((x) => x.date !== c.date)
   all.push(c)
   ls.set(LS_CHECKINS, all)
+  if (authed && saved === null) throw new Error('保存失败，请检查网络后重试')
 }
 
 export async function loadWaist(): Promise<WaistEntry[]> {
@@ -233,11 +243,13 @@ export async function loadWaist(): Promise<WaistEntry[]> {
 }
 
 export async function saveWaist(e: WaistEntry): Promise<void> {
-  await api('/api/waist', { method: 'POST', body: JSON.stringify(e) })
+  const authed = !!getToken()
+  const saved = await api('/api/waist', { method: 'POST', body: JSON.stringify(e) })
   const all = ls.get<WaistEntry[]>(LS_WAIST, []).filter((x) => x.date !== e.date)
   all.push(e)
   all.sort((a, b) => a.date.localeCompare(b.date))
   ls.set(LS_WAIST, all)
+  if (authed && saved === null) throw new Error('保存失败，请检查网络后重试')
 }
 
 export function todayStr(offset = 0): string {

@@ -3,7 +3,7 @@ import { painFeedback } from '../data'
 import type { CheckIn } from '../api'
 import { todayStr } from '../api'
 
-export default function CheckInForm({ existing, onSave }: { existing?: CheckIn | null; onSave: (c: CheckIn) => Promise<void> }) {
+export default function CheckInForm({ existing, synced, onSave }: { existing?: CheckIn | null; synced?: boolean; onSave: (c: CheckIn) => Promise<void> }) {
   const [c, setC] = useState<CheckIn>(existing ?? { date: todayStr(), morning: false, micro_breaks: 0, core: false, walking_minutes: 0, bedtime_stretch: false, pain: 0, note: '' })
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -46,9 +46,9 @@ export default function CheckInForm({ existing, onSave }: { existing?: CheckIn |
       <p className="muted">24 小时规则：练时 ≤3 分、30 分钟内缓解、第二天早上不比平时高 1–2 分以上、24 小时内回到原来水平，且没有新腿痛麻木无力，才能加量；每次只改一个变量，每周加不超过 10%。</p>
       <label>备注</label>
       <textarea rows={2} value={c.note} onChange={(e) => update({ note: e.target.value })} placeholder="例如：今天久坐多，脖子有点紧" />
-      <button className="primary" disabled={saving} onClick={handleSave}>{saving ? '保存中…' : saved ? '已保存在本机 ✓' : '保存今日打卡'}</button>
+      <button className="primary" disabled={saving} onClick={handleSave}>{saving ? '保存中…' : saved ? (synced ? '已同步到云端 ✓' : '已保存在本机 ✓') : '保存今日打卡'}</button>
       {saveError && <p className="danger">保存失败，请检查网络后重试，刚才的内容还在。</p>}
-      {saved && <p className="muted">仅保存在当前浏览器里（Pages 体验版没有服务器同步），换设备或清缓存会丢失。</p>}
+      {saved && <p className="muted">{synced ? '已保存到你的账号，换设备登录也能看到。' : '仅保存在当前浏览器里（Pages 体验版没有服务器同步），换设备或清缓存会丢失。'}</p>}
     </div>
   )
 }
