@@ -96,8 +96,17 @@ export default {
       }
     }
 
-    // SPA fallback: serve the built asset, falling back to index.html.
-    const asset = await env.ASSETS.fetch(request)
+    // The built HTML references /Resumetraining/assets/... because the Vite
+    // base is set for the GitHub Pages deployment. The Worker serves the
+    // same files at /assets/..., so strip the prefix before fetching.
+    // Without this, the asset lookup 404s and the SPA fallback returns
+    // index.html with a text/html MIME type, which browsers reject for
+    // module scripts.
+    const assetUrl = new URL(request.url)
+    if (assetUrl.pathname.startsWith('/Resumetraining/')) {
+      assetUrl.pathname = assetUrl.pathname.slice('/Resumetraining'.length)
+    }
+    const asset = await env.ASSETS.fetch(new Request(assetUrl, request))
     if (asset.status !== 404) return asset
     return env.ASSETS.fetch(new Request(new URL('/', request.url), request))
   },
