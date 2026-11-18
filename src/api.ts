@@ -1,6 +1,11 @@
 // API client: D1-backed Worker API is the source of truth when deployed.
 // localStorage is only an offline fallback (same keys), so the app still
 // works when opened locally without a Worker.
+//
+// Accounts: the Worker deployment requires a session (email + password).
+// Each account only sees its own profile, check-ins and waist entries.
+// The static GitHub Pages build has no Worker, so it runs in local mode:
+// no login screen, data stays in this browser only.
 
 export interface Profile {
   age?: number | null
@@ -41,18 +46,131 @@ export interface WaistEntry {
   waist_cm: number
 }
 
+export interface AuthUser {
+  id: number
+  email: string
+}
+
+// 'authed': Worker session is valid. 'guest': Worker is present but the
+// session is missing or expired, show the login screen. 'local': no Worker
+// behind this build (static Pages / offline), use browser storage only.
+export type AuthState =
+  | { mode: 'authed'; user: AuthUser }
+  | { mode: 'guest' }
+  | { mode: 'local' }
+
 const LS_PROFILE = 'rt_profile_v1'
 const LS_CHECKINS = 'rt_checkins_v1'
 const LS_WAIST = 'rt_waist_v1'
+const LS_TOKEN = 'rt_token_v1'
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(LS_TOKEN)
+  } catch {
+    return null
+  }
+}
+
+function setToken(t: string) {
+  try {
+    localStorage.setItem(LS_TOKEN, t)
+  } catch {
+    /* storage unavailable — ignore */
+  }
+}
+
+// Clears the session and the browser-side data cache, so a different
+// account on the same browser never sees the previous account's data.
+export function clearAuthData() {
+  try {
+    localStorage.removeItem(LS_TOKEN)
+    localStorage.removeItem(LS_PROFILE)
+    localStorage.removeItem(LS_CHECKINS)
+    localStorage.removeItem(LS_WAIST)
+  } catch {
+    /* storage unavailable — ignore */
+  }
+}
+
+let unauthorizedHandler: (() => void) | null = null
+export function onUnauthorized(fn: () => void) {
+  unauthorizedHandler = fn
+}
 
 async function api<T>(path: string, init?: RequestInit): Promise<T | null> {
   try {
-    const res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } })
+    const token = getToken()
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...((init?.headers as Record<string, string> | undefined) || {}),
+    }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    const res = await fetch(path, { ...init, headers })
+    if (res.status === 401) {
+      unauthorizedHandler?.()
+      return null
+    }
     if (!res.ok) return null
     return (await res.json()) as T
   } catch {
     return null
   }
+}
+
+export async function getAuthState(): Promise<AuthState> {
+  const token = getToken()
+  try {
+    const res = await fetch('/api/auth/me', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (res.status === 401) return { mode: 'guest' }
+    if (!res.ok) return { mode: 'local' }
+    const data = (await res.json()) as { id?: unknown; email?: unknown }
+    if (!data || typeof data.email !== 'string' || typeof data.id !== 'number') return { mode: 'local' }
+    return { mode: 'authed', user: { id: data.id, email: data.email } }
+  } catch {
+    return { mode: 'local' }
+  }
+}
+
+async function authRequest(path: string, body: unknown): Promise<AuthUser> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = (await res.json().catch(() => null)) as {
+    token?: string
+    user?: AuthUser
+    message?: string
+  } | null
+  if (!res.ok || !data?.token || !data?.user) {
+    throw new Error(data?.message || '出了点问题，再试一次')
+  }
+  setToken(data.token)
+  return data.user
+}
+
+export function login(email: string, password: string): Promise<AuthUser> {
+  return authRequest('/api/auth/login', { email, password })
+}
+
+export function register(email: string, password: string): Promise<AuthUser> {
+  return authRequest('/api/auth/register', { email, password })
+}
+
+export async function logout(): Promise<void> {
+  const token = getToken()
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+  } catch {
+    /* logout is best-effort — the local session is cleared below anyway */
+  }
+  clearAuthData()
 }
 
 const ls = {

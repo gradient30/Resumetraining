@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DAILY_SKELETON, EXERCISES, PHASES, RED_FLAGS, painFeedback } from './data'
-import { loadCheckIns, loadProfile, loadWaist, saveCheckIn, saveProfile, saveWaist, todayStr, weekNumber } from './api'
-import type { CheckIn, Profile, WaistEntry } from './api'
+import { getAuthState, loadCheckIns, loadProfile, loadWaist, logout, onUnauthorized, saveCheckIn, saveProfile, saveWaist, todayStr, weekNumber } from './api'
+import type { AuthUser, CheckIn, Profile, WaistEntry } from './api'
+import AuthScreen from './components/Auth'
 import { ExerciseSvg } from './svg'
 import Onboarding from './components/Onboarding'
 import CheckInForm from './components/CheckIn'
@@ -49,13 +50,38 @@ export default function App() {
   const [checkIns, setCheckIns] = useState<CheckIn[]>([])
   const [waist, setWaist] = useState<WaistEntry[]>([])
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [localMode, setLocalMode] = useState(false)
+
+  async function loadAll() {
+    const [p, c, w] = await Promise.all([loadProfile(), loadCheckIns(), loadWaist()])
+    setProfile(p)
+    setCheckIns(c)
+    setWaist(w)
+  }
+
+  function toLogin() {
+    setUser(null)
+    setProfile(null)
+    setCheckIns([])
+    setWaist([])
+    setLoaded(true)
+  }
 
   useEffect(() => {
+    onUnauthorized(() => toLogin())
     ;(async () => {
-      const [p, c, w] = await Promise.all([loadProfile(), loadCheckIns(), loadWaist()])
-      setProfile(p)
-      setCheckIns(c)
-      setWaist(w)
+      const state = await getAuthState()
+      if (state.mode === 'authed') {
+        setUser(state.user)
+        await loadAll()
+      } else if (state.mode === 'local') {
+        // No Worker behind this build (static Pages): keep the old
+        // browser-only behaviour, no login screen.
+        setLocalMode(true)
+        await loadAll()
+      }
+      // guest: stay on the login screen, load nothing.
       setLoaded(true)
     })()
   }, [])
@@ -108,6 +134,10 @@ export default function App() {
   ]
 
   if (!loaded) return <div className="app"><p>加载中…</p></div>
+
+  if (!user && !localMode) {
+    return <AuthScreen onDone={async (u) => { setUser(u); await loadAll() }} />
+  }
 
   return (
     <div className="app">
@@ -283,6 +313,12 @@ export default function App() {
       {tab === 'profile' && (
         <div className="card">
           <h2>个人档案</h2>
+          {user && (
+            <>
+              <p>登录账号：{user.email}</p>
+              <button onClick={async () => { await logout(); toLogin() }}>退出登录</button>
+            </>
+          )}
           {profile ? (
             <>
               <p>身高 {profile.height_cm} cm · 体重 {profile.weight_kg} kg · BMI 23.5</p>
