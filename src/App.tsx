@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { DAILY_SKELETON, EXERCISES, PHASES, RED_FLAGS, painFeedback } from './data'
+import { DAILY_SKELETON, EXERCISES, EXERCISE_PHOTOS, PHASES, RED_FLAGS, painFeedback } from './data'
 import { clearAuthData, getAuthState, loadCheckIns, loadProfile, loadWaist, logout, onUnauthorized, saveCheckIn, saveProfile, saveWaist, todayStr, weekNumber } from './api'
 import type { AuthUser, CheckIn, Profile, WaistEntry } from './api'
 import AuthScreen from './components/Auth'
@@ -299,11 +299,19 @@ export default function App() {
           </div>
           <div className="card">
             <h2>动作库 · 第 {phase} 阶段剂量</h2>
-            <p className="muted">示意图为手绘 SVG 拟人图（无真人照片、无外部图片）。不做仰卧起坐、卷腹、负重弯腰、负重扭转、突然发力。</p>
+            <p className="muted">有真人照片的动作照着照片做；还没有照片的先用手绘示意，正在陆续补真人图。不做仰卧起坐、卷腹、负重弯腰、负重扭转、突然发力。</p>
             {EXERCISES.map((ex) => (
               <div className="ex" key={ex.id}>
                 <h3>{ex.name} <span className="chip">{ex.group}</span></h3>
-                <ExerciseSvg pose={ex.pose} name={ex.name} />
+                {EXERCISE_PHOTOS[ex.id] ? (
+                  <div className="ex-photos">
+                    {EXERCISE_PHOTOS[ex.id].map((src, i) => (
+                      <img key={i} src={src} alt={`${ex.name}真人示范${EXERCISE_PHOTOS[ex.id].length > 1 ? `（${i + 1}）` : ''}`} loading="lazy" />
+                    ))}
+                  </div>
+                ) : (
+                  <ExerciseSvg pose={ex.pose} name={ex.name} />
+                )}
                 <p><strong>剂量：</strong>{ex.doses[phase - 1]}</p>
                 <p className="muted">{ex.tip}</p>
                 {ex.caution && <p className="warn">{ex.caution}</p>}

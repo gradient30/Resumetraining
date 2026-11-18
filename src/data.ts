@@ -3,6 +3,23 @@
 // they are starting points to confirm with an in-person physiotherapist.
 // No sit-ups, crunches, loaded spinal flexion or loaded twisting anywhere.
 
+// Real-person demonstration photos, reused from the stored version
+// (same model, white background, yoga mat) plus new photos generated
+// in the same style for the exercises that had none.
+import chinTuck from './assets/chin-tuck.jpg'
+import scapular from './assets/scapular-retraction.jpg'
+import chestOpener from './assets/chest-opener.jpg'
+import deadBug from './assets/dead-bug-photo.webp'
+import gluteBridge from './assets/glute-bridge-photo.jpg'
+import birdDogStart from './assets/bird-dog-start.jpg'
+import birdDogFinish from './assets/bird-dog-finish.jpg'
+import briskWalk from './assets/brisk-walk.jpg'
+import hipFlexor from './assets/hip-flexor.jpg'
+import wallsit from './assets/wallsit.jpg'
+import catcow from './assets/catcow.jpg'
+import sideplank from './assets/sideplank.jpg'
+import hamstring from './assets/hamstring.jpg'
+
 export type Pose =
   | 'chin'
   | 'shoulder'
@@ -61,6 +78,23 @@ export const EXERCISES: Exercise[] = [
   { id: 'hamstring', name: '腘绳肌拉伸（仰卧带子）', pose: 'hamstring', group: '拉伸', tip: '仰卧用带子拉腿，膝盖微弯，只拉到轻微紧张感，绝不站着够脚尖、不弹震。', caution: '拉到膝盖以下腿痛就停，去找康复师。', doses: ['2×20–30 秒/侧', '2×20–30 秒/侧', '2×20–30 秒/侧'] },
   { id: 'walk', name: '快走', pose: 'walk', group: '有氧', tip: '中速到快走，能说话但呼吸明显加快；每周总量目标 150 分钟以上，逐步加到 150–300 分钟。', doses: ['每天 20 分钟', '每天 25–30 分钟', '每天 30–45 分钟'] },
 ]
+
+// Real-person demonstration photos by exercise id. Exercises without an
+// entry here fall back to the hand-drawn SVG figure until a photo is added.
+export const EXERCISE_PHOTOS: Record<string, string[]> = {
+  chin: [chinTuck],
+  scapular: [scapular],
+  chest: [chestOpener],
+  deadbug: [deadBug],
+  birddog: [birdDogStart, birdDogFinish],
+  bridge: [gluteBridge],
+  hipflexor: [hipFlexor],
+  walk: [briskWalk],
+  wallsit: [wallsit],
+  catcow: [catcow],
+  sideplank: [sideplank],
+  hamstring: [hamstring],
+}
 
 export const PHASES = [
   {
