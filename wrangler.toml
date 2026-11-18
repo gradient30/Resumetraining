@@ -9,11 +9,10 @@ compatibility_flags = ["nodejs_compat"]
 directory = "./dist"
 binding = "ASSETS"
 
-# D1 database. Create it once, then replace <YOUR_D1_DATABASE_ID> with the
-# id printed by `npx wrangler d1 create resumetraining-db`.
-# The same id must also be stored as the GitHub secret CLOUDFLARE_D1_DATABASE_ID.
+# D1 database. Created 2026-11-18 via the Cloudflare API; id below.
+# No secret is needed for the id: wrangler reads it from this file.
 [[d1_databases]]
 binding = "DB"
 database_name = "resumetraining-db"
-database_id = "<YOUR_D1_DATABASE_ID>"
+database_id = "eb7d0ff5-664f-4ba0-8fbb-6f8700f6bc85"
 migrations_dir = "migrations"
