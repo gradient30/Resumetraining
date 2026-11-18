@@ -1,0 +1,19 @@
+name = "resumetraining"
+main = "src/worker.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets: the Vite build output. The Worker serves /api/* and
+# falls back to these assets for every other path (SPA).
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+
+# D1 database. Create it once, then replace <YOUR_D1_DATABASE_ID> with the
+# id printed by `npx wrangler d1 create resumetraining-db`.
+# The same id must also be stored as the GitHub secret CLOUDFLARE_D1_DATABASE_ID.
+[[d1_databases]]
+binding = "DB"
+database_name = "resumetraining-db"
+database_id = "<YOUR_D1_DATABASE_ID>"
+migrations_dir = "migrations"

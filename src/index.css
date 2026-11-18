@@ -1,0 +1,110 @@
+/* Huawei Health (华为运动健康) style — card dashboard, warm rings, large numbers. */
+* { box-sizing: border-box; }
+:root {
+  --bg: #f5f5f7; --card: #ffffff; --text: #1a1a1a; --muted: #8a8a8e;
+  --line: #ececf0; --red: #e60012; --red-soft: #f4333f; --orange: #ff7a1a;
+  --green: #00b578; --blue: #2f7cf6; --amber: #d97706;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+.app { max-width: 560px; margin: 0 auto; padding: 16px 14px 104px; }
+
+/* ---- Hero / greeting ---- */
+.hero { padding: 6px 2px 2px; }
+.hero-date { color: var(--muted); font-size: 13px; margin: 0 0 4px; }
+.hero h1 { font-size: 26px; line-height: 1.3; margin: 0 0 6px; font-weight: 700; letter-spacing: 0.2px; }
+.hero-sub { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0 0 10px; }
+.hero-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+
+/* ---- Cards ---- */
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin: 12px 0; box-shadow: var(--shadow); }
+.card h2 { font-size: 17px; margin: 0 0 8px; font-weight: 700; }
+.card h3 { font-size: 15px; margin: 12px 0 6px; }
+.muted { color: var(--muted); font-size: 13px; line-height: 1.7; }
+.big-num { font-size: 30px; font-weight: 700; line-height: 1.1; letter-spacing: -0.5px; }
+.big-num small { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+
+.warn { background: #fff7e6; border: 1px solid #ffe1a8; border-radius: 14px; padding: 12px; font-size: 13px; line-height: 1.7; color: #7a5b00; }
+.danger { background: #fee2e2; border: 1px solid #f87171; border-radius: 14px; padding: 12px; font-size: 13px; line-height: 1.7; }
+.okbox { background: #e6f7ef; border: 1px solid #86efac; border-radius: 14px; padding: 12px; font-size: 13px; line-height: 1.7; }
+
+button { font-size: 15px; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--line); background: #fff; cursor: pointer; color: var(--text); }
+button.primary { background: linear-gradient(135deg, #ff4d4d, var(--red)); color: #fff; border-color: transparent; width: 100%; font-weight: 700; box-shadow: 0 4px 12px rgba(230, 0, 18, 0.25); }
+button:disabled { opacity: .5; cursor: default; }
+input, select, textarea { width: 100%; font-size: 15px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; margin: 4px 0 10px; background: #fafafa; color: var(--text); }
+input:focus, select:focus, textarea:focus { outline: 2px solid #ffd6d9; border-color: var(--red-soft); background: #fff; }
+label { font-size: 13px; color: var(--muted); display: block; }
+
+/* ---- Bottom nav (Huawei 5-tab style, adapted to 4 tabs) ---- */
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(8px); border-top: 1px solid var(--line); display: flex; justify-content: center; padding: 6px 0 calc(8px + env(safe-area-inset-bottom)); z-index: 10; box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.04); }
+.tabs button { border: 0; flex: 1; max-width: 120px; font-size: 12px; padding: 6px 4px; color: var(--muted); background: transparent; }
+.tabs button .tab-icon { display: block; font-size: 20px; line-height: 1.2; }
+.tabs button.active { color: var(--red); font-weight: 700; }
+
+.chip { display: inline-block; background: #fdecec; color: var(--red); border-radius: 999px; padding: 4px 11px; font-size: 12px; margin: 2px 4px 2px 0; font-weight: 600; }
+.chip-red { background: #fdecec; color: var(--red); }
+.chip-green { background: #e6f7ef; color: #00875a; }
+.chip-blue { background: #e8f1fe; color: #1d4ed8; }
+
+.ex { border-top: 1px solid var(--line); padding: 14px 0; }
+.ex h3 { margin: 0 0 6px; }
+.painrow { display: flex; gap: 6px; flex-wrap: wrap; }
+.painrow button { flex: 1; min-width: 34px; padding: 9px 0; border-radius: 10px; }
+.painrow button.sel { background: var(--red); color: #fff; border-color: var(--red); }
+.progress { height: 10px; background: #f0f0f2; border-radius: 99px; overflow: hidden; }
+.progress > div { height: 100%; background: linear-gradient(90deg, #ff8a5c, var(--red)); border-radius: 99px; transition: width 0.5s ease; }
+svg text { font-family: sans-serif; }
+
+/* ---- Activity rings ---- */
+.rings-card { text-align: left; }
+.rings-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.rings-head h2 { margin: 0; }
+.rings-wrap { position: relative; width: 220px; height: 220px; margin: 6px auto 2px; }
+.rings-svg { width: 220px; height: 220px; display: block; }
+.rings-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.rings-center-num { font-size: 34px; font-weight: 800; line-height: 1; }
+.rings-center-num span { font-size: 18px; color: var(--muted); font-weight: 600; }
+.rings-center-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.ring-legend { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.legend-item { display: flex; align-items: center; gap: 10px; }
+.legend-item > div { flex: 1; display: flex; flex-direction: column; }
+.legend-item strong { font-size: 14px; }
+.legend-item span { font-size: 12px; color: var(--muted); }
+.legend-item > b { font-size: 14px; }
+.legend-item.done strong { color: var(--text); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.rings-celebrate { background: #fff1f2; border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; margin: 12px 0 0; }
+
+/* ---- Clover / health cards ---- */
+.clover-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.clover-card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px; box-shadow: var(--shadow); }
+.clover-card .clover-icon { font-size: 22px; line-height: 1; }
+.clover-card h3 { font-size: 14px; margin: 6px 0 2px; }
+.clover-card p { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.clover-card .clover-status { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 3px 9px; background: #f0f0f2; color: var(--muted); }
+.clover-card .clover-status.done { background: #e6f7ef; color: #00875a; }
+
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.stat-card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px; box-shadow: var(--shadow); }
+.stat-card .stat-label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.stat-card .stat-sub { font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 4px; }
+.stat-card .stat-sub b { color: var(--text); }
+
+/* ---- Today tasks checklist ---- */
+.task-row { display: flex; align-items: center; gap: 10px; padding: 11px 2px; border-top: 1px solid var(--line); }
+.task-row:first-of-type { border-top: 0; }
+.task-check { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #d9d9de; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #fff; flex-shrink: 0; }
+.task-row.done .task-check { background: var(--green); border-color: var(--green); }
+.task-row .task-text { flex: 1; }
+.task-row .task-text strong { font-size: 14px; display: block; }
+.task-row .task-text span { font-size: 12px; color: var(--muted); }
+.task-row.done .task-text strong { color: var(--muted); text-decoration: line-through; }
+
+/* ---- Insight ---- */
+.insight-card { background: linear-gradient(135deg, #fff1f2, #fff7e6); border: 1px solid #ffe1a8; }
+.insight-card h2 { margin-bottom: 4px; }
+.insight-card p { margin: 0; font-size: 14px; line-height: 1.7; }
+
+/* ---- Phase cards (plan tab) ---- */
+.phase-card { border: 1px solid var(--line); border-radius: 16px; padding: 12px; margin: 8px 0; background: #fafafa; }
+.phase-card.current { border: 2px solid var(--red); background: #fff; }
