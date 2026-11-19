@@ -96,7 +96,7 @@ export default function AuthScreen({ onDone }: { onDone: (u: AuthUser) => void }
 
       <div className="card">
         <h2>{heading}</h2>
-        <label className="muted">{mode === 'register' ? '邮箱（只用来登录，暂不验证）' : '邮箱（用来登录，不验证）'}</label>
+        <label className="muted">邮箱</label>
         <input
           type="email"
           placeholder="name@example.com"
@@ -230,9 +230,11 @@ export default function AuthScreen({ onDone }: { onDone: (u: AuthUser) => void }
       </div>
 
       <p className="muted">
-        注册不需要验证邮箱，邮箱只用来登录。登录有效期 30 天，到期后重新登录一次。
-        同一台设备退出登录后，浏览器里的缓存数据会一起清除，不会留给下一个账号。
-        {mode === 'login' && '忘记密码了，点上面的“忘记密码？”用重置码重设。'}
+        {mode === 'login'
+          ? '请使用注册邮箱登录。'
+          : mode === 'register'
+            ? '请使用邮箱注册账号。'
+            : '请使用注册邮箱重置密码。'}
       </p>
     </div>
   )
