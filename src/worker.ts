@@ -398,6 +398,84 @@ export default {
           return json({ ok: true })
         }
 
+        // 找回密码（第一步）：生成一次性 6 位数字重置码，只把 SHA-256
+        // 哈希存进 password_resets，15 分钟过期，旧码同时作废。
+        // 本项目暂无邮件发送能力，码由管理员在站外单独交给用户，
+        // 所以响应里绝不返回重置码；邮箱不存在时也返回同样的 ok，
+        // 不枚举账号是否存在。限流：邮箱 + IP 组合键，5 次 / 小时。
+        if (url.pathname === '/api/auth/forgot-password' && request.method === 'POST') {
+          const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+          const body = await readJson(request)
+          if (!body) return bad('invalid_json', '请求内容不是合法的 JSON')
+          const email = String(body.email ?? '').trim().toLowerCase()
+          if (!isEmail(email)) return json({ error: 'invalid_email', message: '邮箱格式不对，检查一下' }, 400)
+          if (!(await checkRateLimit(env, `forgot:${email}:${ip}`, 5, 3600))) {
+            return json({ error: 'too_many_requests', message: '尝试太多次了，请 1 小时后再试' }, 429)
+          }
+          const user = await env.DB.prepare('SELECT id FROM users WHERE email = ?1').bind(email).first()
+          if (user) {
+            const digits = crypto.getRandomValues(new Uint8Array(6))
+            const code = [...digits].map((b) => String(b % 10)).join('')
+            const expires = new Date(Date.now() + 15 * 60000).toISOString().replace('T', ' ').slice(0, 19)
+            await env.DB.prepare('UPDATE password_resets SET used = 1 WHERE email = ?1 AND used = 0')
+              .bind(email)
+              .run()
+            await env.DB.prepare(
+              'INSERT INTO password_resets (email, token_hash, expires_at) VALUES (?1, ?2, ?3)',
+            )
+              .bind(email, await sha256Hex(code), expires)
+              .run()
+          }
+          return json({ ok: true, message: '如果该邮箱已注册，重置码已生成，请联系管理员获取' })
+        }
+
+        // 找回密码（第二步）：凭邮箱 + 6 位重置码 + 新密码重置。
+        // 码不对、过期、已用、邮箱不存在一律返回同一条通用提示，
+        // 不透露是哪一种失败。成功后换新盐 + 新哈希，并删除该用户
+        // 全部会话，强制重新登录。限流：邮箱 + IP 组合键，10 次 / 10 分钟。
+        if (url.pathname === '/api/auth/reset-password' && request.method === 'POST') {
+          const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+          const body = await readJson(request)
+          if (!body) return bad('invalid_json', '请求内容不是合法的 JSON')
+          const email = String(body.email ?? '').trim().toLowerCase()
+          const code = String(body.code ?? '')
+          const newPassword = String(body.new_password ?? '')
+          if (!isEmail(email)) return json({ error: 'invalid_email', message: '邮箱格式不对，检查一下' }, 400)
+          if (!/^\d{6}$/.test(code)) {
+            return json({ error: 'invalid_reset', message: '重置码不对或已过期，请重新获取' }, 400)
+          }
+          if (newPassword.length < 8) {
+            return json({ error: 'weak_password', message: '新密码至少 8 位，建议含字母+数字' }, 400)
+          }
+          if (!(await checkRateLimit(env, `reset:${email}:${ip}`, 10, 600))) {
+            return json({ error: 'too_many_requests', message: '尝试太多次了，请 10 分钟后再试' }, 429)
+          }
+          const genericFail = json(
+            { error: 'invalid_reset', message: '重置码不对或已过期，请重新获取' },
+            400,
+          )
+          const user = await env.DB.prepare('SELECT id FROM users WHERE email = ?1')
+            .bind(email)
+            .first<{ id: number }>()
+          if (!user) return genericFail
+          const codeHash = await sha256Hex(code)
+          const { results: candidates } = await env.DB.prepare(
+            "SELECT id, token_hash FROM password_resets WHERE email = ?1 AND used = 0 AND expires_at > datetime('now') ORDER BY created_at DESC",
+          )
+            .bind(email)
+            .all<{ id: number; token_hash: string }>()
+          const match = candidates.find((r) => constantTimeEqual(codeHash, String(r.token_hash)))
+          if (!match) return genericFail
+          const salt = crypto.getRandomValues(new Uint8Array(16))
+          const hash = await hashPassword(newPassword, salt)
+          await env.DB.prepare('UPDATE users SET password_hash = ?1, password_salt = ?2 WHERE id = ?3')
+            .bind(hash, bufToB64(salt.buffer), user.id)
+            .run()
+          await env.DB.prepare('UPDATE password_resets SET used = 1 WHERE id = ?1').bind(match.id).run()
+          await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?1').bind(user.id).run()
+          return json({ ok: true, message: '密码已重置，请用新密码登录' })
+        }
+
         if (url.pathname === '/api/auth/me' && request.method === 'GET') {
           const userId = await authUserId(request, env)
           if (!userId) return json({ error: 'unauthorized', message: '请先登录' }, 401)

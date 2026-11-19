@@ -252,6 +252,33 @@ export function register(email: string, password: string): Promise<AuthUser> {
   return authRequest('/api/auth/register', { email, password })
 }
 
+async function resetRequest(path: string, body: unknown): Promise<{ ok: boolean; message?: string }> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = (await res.json().catch(() => null)) as { ok?: boolean; message?: string } | null
+  if (!res.ok || !data?.ok) {
+    throw new Error(data?.message || '出了点问题，再试一次')
+  }
+  return { ok: true, message: data.message }
+}
+
+// 找回密码第一步：请求生成重置码（响应不含码本身，码由管理员站外提供）。
+export function forgotPassword(email: string): Promise<{ ok: boolean; message?: string }> {
+  return resetRequest('/api/auth/forgot-password', { email })
+}
+
+// 找回密码第二步：凭邮箱 + 6 位重置码 + 新密码重置，成功后需重新登录。
+export function resetPassword(
+  email: string,
+  code: string,
+  newPassword: string,
+): Promise<{ ok: boolean; message?: string }> {
+  return resetRequest('/api/auth/reset-password', { email, code, new_password: newPassword })
+}
+
 export async function logout(): Promise<void> {
   const token = getToken()
   try {
