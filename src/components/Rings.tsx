@@ -1,12 +1,17 @@
 // 活力三环 — Huawei Health style activity rings (SVG only, no images).
 // Ring 1 晨间颈肩 (red), Ring 2 核心力量 (orange), Ring 3 步行 (green).
 // Each ring is 0-100%; a ring is "lit" when its task is done.
-// Walking target is 30 min/day (mid-phase target; phase 1 is 20, phase 3 is 30-45).
+// Walking target is the per-week daily dose from v2 §六 (22→40 min/day),
+// passed in from App as `walkTarget` — no longer a fixed 30 min/day.
+// The core ring is still lit by `core` only; strength is tracked separately
+// in the task list (App.tsx) and does not enter the three rings.
 
 export interface RingState {
   morning: boolean
   core: boolean
   walkingMinutes: number
+  /** 当日阶段剂量（分钟），由 App 按周数传入；未传时默认 30 分钟。 */
+  walkTarget?: number
 }
 
 function Ring({
@@ -42,9 +47,10 @@ function Ring({
   )
 }
 
-export default function ActivityRings({ morning, core, walkingMinutes }: RingState) {
-  const walkPct = Math.min(1, walkingMinutes / 30)
-  const walkDone = walkingMinutes >= 30
+export default function ActivityRings({ morning, core, walkingMinutes, walkTarget = 30 }: RingState) {
+  const target = walkTarget > 0 ? walkTarget : 30
+  const walkPct = Math.min(1, walkingMinutes / target)
+  const walkDone = walkingMinutes >= target
   const doneCount = (morning ? 1 : 0) + (core ? 1 : 0) + (walkDone ? 1 : 0)
   const allDone = doneCount === 3
 
@@ -92,7 +98,7 @@ export default function ActivityRings({ morning, core, walkingMinutes }: RingSta
         </div>
         <div className={`legend-item ${walkDone ? 'done' : ''}`}>
           <span className="legend-dot" style={{ background: '#00b578' }} />
-          <div><strong>步行</strong><span>{walkDone ? '已完成' : `已走 ${walkingMinutes} 分钟 · 目标 30 分钟`}</span></div>
+          <div><strong>步行</strong><span>{`已走 ${walkingMinutes} 分钟 · 目标 ${target} 分钟`}</span></div>
           <b>{Math.round(walkPct * 100)}%</b>
         </div>
       </div>

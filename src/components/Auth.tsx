@@ -16,8 +16,8 @@ export default function AuthScreen({ onDone }: { onDone: (u: AuthUser) => void }
       setError('邮箱格式不对，检查一下')
       return
     }
-    if (password.length < 6) {
-      setError('密码至少 6 位')
+    if (password.length < 8) {
+      setError('密码至少 8 位，建议含字母+数字')
       return
     }
     if (mode === 'register' && password !== confirm) {
@@ -48,7 +48,7 @@ export default function AuthScreen({ onDone }: { onDone: (u: AuthUser) => void }
 
       <div className="card">
         <h2>{mode === 'login' ? '登录' : '注册'}</h2>
-        <label className="muted">邮箱（用来登录，不验证）</label>
+        <label className="muted">{mode === 'register' ? '邮箱（只用来登录，暂不验证）' : '邮箱（用来登录，不验证）'}</label>
         <input
           type="email"
           placeholder="name@example.com"
@@ -56,7 +56,7 @@ export default function AuthScreen({ onDone }: { onDone: (u: AuthUser) => void }
           autoComplete="email"
           onChange={(e) => setEmail(e.target.value)}
         />
-        <label className="muted">密码（至少 6 位）</label>
+        <label className="muted">密码（至少 8 位，建议含字母+数字）</label>
         <input
           type="password"
           placeholder="请输入密码"
@@ -74,6 +74,9 @@ export default function AuthScreen({ onDone }: { onDone: (u: AuthUser) => void }
               autoComplete="new-password"
               onChange={(e) => setConfirm(e.target.value)}
             />
+            <p className="muted" style={{ margin: '4px 0 10px' }}>
+              注册确认：密码至少 8 位，建议含字母+数字。
+            </p>
           </>
         )}
         {error && (
@@ -120,6 +123,7 @@ export default function AuthScreen({ onDone }: { onDone: (u: AuthUser) => void }
       <p className="muted">
         注册不需要验证邮箱，邮箱只用来登录。登录有效期 30 天，到期后重新登录一次。
         同一台设备退出登录后，浏览器里的缓存数据会一起清除，不会留给下一个账号。
+        {mode === 'login' && '忘记密码请联系管理员重置（暂无自助找回）。'}
       </p>
     </div>
   )
